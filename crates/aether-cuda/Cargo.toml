@@ -1,0 +1,29 @@
+[package]
+name = "aether-cuda"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "CUDA memory operations and async transfer engine for Aether"
+
+[features]
+default = []
+cuda = ["cudarc"]
+mock = []  # For testing without GPU
+
+[dependencies]
+aether-core = { path = "../aether-core" }
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+parking_lot.workspace = true
+crossbeam.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+
+# CUDA bindings (optional)
+cudarc = { version = "0.11", optional = true, features = ["cuda-12050"] }
+
+[dev-dependencies]
+criterion.workspace = true
+tokio = { workspace = true, features = ["test-util", "macros"] }
