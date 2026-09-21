@@ -1,0 +1,43 @@
+[package]
+name = "aether-bench"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Benchmarking harness for Aether runtime"
+
+[[bin]]
+name = "aether-bench"
+path = "src/main.rs"
+
+[features]
+default = []
+cuda = ["aether-cuda/cuda", "aether-bridge/cuda"]
+
+[dependencies]
+aether-core = { path = "../aether-core" }
+aether-cuda = { path = "../aether-cuda" }
+aether-kernels = { path = "../aether-kernels" }
+aether-bridge = { path = "../aether-bridge" }
+thiserror.workspace = true
+anyhow.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4.4", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+tabled = "0.15"
+indicatif = "0.17"
+rand = "0.8"
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "transfer_bench"
+harness = false
+
+[[bench]]
+name = "decision_bench"
+harness = false

@@ -1,0 +1,26 @@
+[package]
+name = "aether-bridge"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Bridge connecting Aether core state management with CUDA execution"
+
+[features]
+default = []
+cuda = ["aether-cuda/cuda"]
+
+[dependencies]
+aether-core = { path = "../aether-core" }
+aether-cuda = { path = "../aether-cuda" }
+aether-kernels = { path = "../aether-kernels" }
+thiserror.workspace = true
+anyhow.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+parking_lot.workspace = true
+dashmap.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+tokio-test = "0.4"

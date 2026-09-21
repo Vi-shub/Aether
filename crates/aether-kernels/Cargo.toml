@@ -1,0 +1,24 @@
+[package]
+name = "aether-kernels"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Compute kernels for Aether runtime (attention, MLP, MoE)"
+
+[features]
+default = []
+cuda = ["aether-cuda/cuda"]
+flash-attention = []  # FlashAttention support
+
+[dependencies]
+aether-core = { path = "../aether-core" }
+aether-cuda = { path = "../aether-cuda" }
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+parking_lot.workspace = true
+half.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true

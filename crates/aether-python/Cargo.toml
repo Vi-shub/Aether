@@ -1,0 +1,27 @@
+[package]
+name = "aether-python"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Python bindings for Aether runtime"
+
+[lib]
+name = "aether"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+cuda = ["aether-cuda/cuda", "aether-bridge/cuda"]
+
+[dependencies]
+aether-core = { path = "../aether-core" }
+aether-cuda = { path = "../aether-cuda" }
+aether-kernels = { path = "../aether-kernels" }
+aether-bridge = { path = "../aether-bridge" }
+pyo3.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+numpy = "0.20"

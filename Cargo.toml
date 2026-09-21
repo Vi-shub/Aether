@@ -3,7 +3,10 @@ resolver = "2"
 members = [
     "crates/aether-core",
     "crates/aether-cuda",
-    "crates/aether-py",
+    "crates/aether-kernels",
+    "crates/aether-bridge",
+    "crates/aether-bench",
+    "crates/aether-python",
 ]
 
 [workspace.package]
@@ -46,6 +49,12 @@ cudarc = { version = "0.10", optional = true }
 
 # Python bindings
 pyo3 = { version = "0.20", features = ["extension-module"] }
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+indicatif = "0.17"
+tabled = "0.15"
+rand = "0.8"
 
 # Testing
 criterion = "0.5"

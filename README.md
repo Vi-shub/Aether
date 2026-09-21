@@ -1,309 +1,248 @@
-# Aether
+# Aether - State-Aware AI Execution Runtime
 
-**State-Aware AI Execution Runtime**
+**Aether** is an AI execution runtime that jointly optimizes computation and state movement.
+Unlike traditional runtimes that treat memory management as a subordinate cache subsystem,
+Aether asks: *"What should happen next, and should the state be computed, moved, kept,
+transformed, approximated, or discarded?"*
 
-> *Where compute meets state.*
+## Core Thesis
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
+AI inference is increasingly constrained not by compute, but by moving large amounts of state:
+- KV cache (growing with sequence length)
+- Expert weights (MoE models with 100s of experts)
+- Activations (checkpointing/recomputation tradeoffs)
+- Model weights (when exceeding GPU memory)
 
----
-
-## The Problem
-
-Current AI inference systems have **two separate control planes**:
-
-```
-EXECUTION PLANE              MEMORY PLANE
-"What to compute next"       "Where is my data"
-        │                           │
-        └───── LOOSE COUPLING ──────┘
-              (Memory just reacts)
-```
-
-When memory says "data not ready," execution **stalls**. The memory system doesn't know what computation is coming—it just evicts based on LRU or simple priority.
-
-**This is fundamentally wrong.**
-
-Memory decisions ARE execution decisions.
-
----
-
-## The Aether Thesis
-
-> **Can an inference runtime jointly plan computation and state movement rather than treating memory management as a subordinate cache subsystem?**
-
-For any piece of state (KV cache, activations, expert weights, intermediates), Aether asks:
-
-> "Given what computation is coming, should I **keep** it, **move** it, **recompute** it, **approximate** it, or **evict** it?"
-
-This is **not caching**. This is **execution planning**.
-
----
+Aether treats **decision** as the fundamental primitive, choosing between:
+- **KEEP** - State stays where it is
+- **MOVE** - Transfer to another memory tier
+- **PREFETCH** - Speculatively fetch before needed
+- **RECOMPUTE** - Regenerate instead of loading
+- **APPROXIMATE** - Use lower-precision/compressed version
+- **EVICT** - Remove from memory
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         AETHER                              │
-│              State-Aware AI Execution Runtime               │
+│                    AETHER RUNTIME                           │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│   ┌─────────────────┐    ┌─────────────────┐               │
-│   │ ExecutionGraph  │    │  CostModel      │               │
-│   │                 │    │                 │               │
-│   │ • Operations    │    │ • Move cost     │               │
-│   │ • Dependencies  │    │ • Recompute cost│               │
-│   │ • Future needs  │    │ • Bandwidth     │               │
-│   └────────┬────────┘    └────────┬────────┘               │
-│            │                      │                         │
-│            └──────────┬───────────┘                         │
-│                       ▼                                     │
-│            ┌─────────────────────┐                          │
-│            │  DecisionEngine     │                          │
-│            │                     │                          │
-│            │  For each state:    │                          │
-│            │  ├─ KEEP            │                          │
-│            │  ├─ MOVE            │                          │
-│            │  ├─ PREFETCH        │                          │
-│            │  ├─ RECOMPUTE  ◄────┼── Key Innovation         │
-│            │  ├─ APPROXIMATE     │                          │
-│            │  └─ EVICT           │                          │
-│            └──────────┬──────────┘                          │
-│                       │                                     │
-│                       ▼                                     │
-│            ┌─────────────────────┐                          │
-│            │   ExecutionPlan     │                          │
-│            │                     │                          │
-│            │  Ordered decisions  │                          │
-│            │  with dependencies  │                          │
-│            └──────────┬──────────┘                          │
-│                       │                                     │
-│                       ▼                                     │
-│            ┌─────────────────────┐                          │
-│            │   StateManager      │                          │
-│            │                     │                          │
-│            │  • Execute moves    │                          │
-│            │  • Track locations  │                          │
-│            │  • Memory budgets   │                          │
-│            └─────────────────────┘                          │
-│                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │ Execution   │    │   State     │    │   Cost      │     │
+│  │   Graph     │───►│  Manager    │◄───│   Model     │     │
+│  └─────────────┘    └─────────────┘    └─────────────┘     │
+│         │                  │                  │             │
+│         └──────────────────┼──────────────────┘             │
+│                            ▼                                │
+│                  ┌─────────────────┐                        │
+│                  │ Decision Engine │                        │
+│                  └────────┬────────┘                        │
+│                           │                                 │
+│         ┌─────────────────┼─────────────────┐              │
+│         ▼                 ▼                 ▼              │
+│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐      │
+│  │   Kernel    │   │  Transfer   │   │   State     │      │
+│  │  Executor   │   │  Scheduler  │   │  Executor   │      │
+│  └─────────────┘   └─────────────┘   └─────────────┘      │
+│         │                 │                 │              │
+│         └─────────────────┼─────────────────┘              │
+│                           ▼                                │
+│                  ┌─────────────────┐                        │
+│                  │  CUDA Backend   │                        │
+│                  └─────────────────┘                        │
+│                           │                                 │
+│         ┌─────────────────┼─────────────────┐              │
+│         ▼                 ▼                 ▼              │
+│     ┌───────┐        ┌───────┐        ┌───────┐           │
+│     │  HBM  │        │ DRAM  │        │ NVMe  │           │
+│     └───────┘        └───────┘        └───────┘           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
----
+## Crates
 
-## Key Innovation: Move vs Recompute
+| Crate | Description |
+|-------|-------------|
+| `aether-core` | Core types, state management, decision engine, cost model |
+| `aether-cuda` | CUDA memory management, async transfers, memory pools |
+| `aether-kernels` | Compute kernels (attention, MLP, MoE, sampling) |
+| `aether-bridge` | Integration layer connecting core logic with CUDA execution |
+| `aether-bench` | Benchmarking harness for performance measurement |
+| `aether-python` | Python bindings via PyO3 |
 
-Traditional systems: **State not in GPU? Load it.**
+## Quick Start
 
-Aether: **Is loading faster than recomputing?**
-
-```
-Tensor X (100MB) in DRAM
-├── MOVE to HBM:     3.1ms (at 32 GB/s)
-└── RECOMPUTE:       2.0ms (single matmul)
-
-Decision: RECOMPUTE (saves 1.1ms)
-```
-
-For NVMe storage, the difference is even larger:
-
-```
-Tensor X (500MB) on NVMe
-├── LOAD to HBM:    74.9ms (at 7 GB/s)
-└── RECOMPUTE:      15.0ms (MLP forward)
-
-Decision: RECOMPUTE (5x speedup!)
-```
-
----
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/aether-runtime/aether
-cd aether
-
-# Build with Cargo
-cargo build --release
-
-# Run tests
-cargo test
-```
-
----
-
-## Quick Start (Rust)
+### Rust
 
 ```rust
-use aether_core::{
-    ExecutionState, StateType, Location, Action,
-    HardwareConfig, CostModel, DecisionEngine, Constraints,
-    ExecutionGraph,
-};
-use std::collections::HashMap;
+use aether_bridge::{UnifiedRuntime, RuntimeConfig};
+use aether_core::{ExecutionState, StateType, Location};
 
-fn main() {
-    // Configure hardware
-    let hardware = HardwareConfig::builder()
-        .device_name("RTX 4090")
-        .hbm_capacity_gb(24.0)
-        .pcie_bandwidth_gbps(32.0)
-        .build();
+// Create runtime
+let config = RuntimeConfig::h100();
+let runtime = UnifiedRuntime::new(config)?;
 
-    // Create decision engine
-    let cost_model = CostModel::new(hardware.clone());
-    let mut engine = DecisionEngine::new(cost_model);
+// Register states
+let kv_cache = ExecutionState::kv_cache(
+    0,      // id
+    0,      // layer
+    1,      // batch_size
+    2048,   // seq_len
+    32,     // num_kv_heads
+    128,    // head_dim
+);
+runtime.state_manager().register(kv_cache)?;
 
-    // Create some states
-    let mut states = HashMap::new();
-    
-    let kv_cache = ExecutionState::kv_cache(0, 2048, 32, 128, DType::Float16)
-        .with_location(Location::Dram);
-    states.insert(kv_cache.id.clone(), kv_cache);
+// Plan and execute
+let plan = runtime.plan()?;
+runtime.execute().await?;
+```
 
-    // Create execution graph
-    let graph = ExecutionGraph::new();
+### Python
 
-    // Plan with constraints
-    let constraints = Constraints::new()
-        .with_hbm_budget(20 * 1024 * 1024 * 1024) // 20GB
-        .with_prefetch_horizon(8);
+```python
+import aether
 
-    let plan = engine.plan(&states, &graph, &constraints, 0);
+# Create runtime
+runtime = aether.Runtime.h100()
 
-    // Execute decisions
-    for decision in &plan {
-        println!("{}: {:?}", decision.state_id, decision.action);
-    }
+# Register KV cache state
+kv_cache = aether.State.kv_cache(
+    layer=0,
+    size_bytes=128 * 1024 * 1024,
+    shape=[1, 2048, 32, 128]
+)
+runtime.register_state(kv_cache)
+
+# Plan execution
+plan = runtime.plan()
+print(f"Plan: {plan.summary()}")
+
+# Execute
+runtime.execute(plan)
+```
+
+## Benchmarking
+
+Run the benchmark suite:
+
+```bash
+# All benchmarks
+cargo run --release -p aether-bench -- all
+
+# Transfer benchmarks only
+cargo run --release -p aether-bench -- transfer
+
+# Decision engine benchmarks
+cargo run --release -p aether-bench -- decision
+
+# Memory management benchmarks
+cargo run --release -p aether-bench -- memory
+
+# Output to file
+cargo run --release -p aether-bench -- all -o results.md -f markdown
+```
+
+## Key Concepts
+
+### Execution State
+
+Everything generated or required during inference becomes a **state object**:
+
+```rust
+pub struct ExecutionState {
+    pub id: StateId,
+    pub state_type: StateType,      // KvCache, Activation, Weight, ExpertWeight, etc.
+    pub location: Location,          // Hbm, Dram, Nvme, RemoteGpu, etc.
+    pub size_bytes: u64,
+    pub compute_cost_ms: Option<f64>, // Cost to recompute
+    pub recomputable: bool,
+    pub dependencies: Vec<StateId>,
+    // ...
 }
 ```
 
----
+### Decision Engine
 
-## Project Structure
-
-```
-aether/
-├── Cargo.toml              # Workspace configuration
-├── crates/
-│   ├── aether-core/        # Core library
-│   │   └── src/
-│   │       ├── types.rs        # StateType, Location, Action
-│   │       ├── state.rs        # ExecutionState
-│   │       ├── decision.rs     # StateDecision, ExecutionPlan
-│   │       ├── graph.rs        # ExecutionGraph
-│   │       ├── hardware.rs     # HardwareConfig
-│   │       ├── cost_model.rs   # Cost estimation
-│   │       ├── decision_engine.rs  # Core planning
-│   │       └── state_manager.rs    # State tracking
-│   ├── aether-cuda/        # CUDA bindings (planned)
-│   └── aether-py/          # Python bindings (planned)
-├── examples/               # Example code
-├── benches/               # Benchmarks
-└── tests/                 # Integration tests
-```
-
----
-
-## Core Concepts
-
-### ExecutionState
-Every piece of data in inference: KV cache, activations, weights, experts.
+The decision engine evaluates each state against the execution graph:
 
 ```rust
-let state = ExecutionState::kv_cache(layer_id, seq_len, num_heads, head_dim, dtype)
-    .with_location(Location::Dram)
-    .with_compute_cost(5.0);  // ms to recompute
+let decision = engine.decide_for_state(&state, &graph, &constraints);
+// Returns: Action::Keep | Action::Move | Action::Recompute | Action::Evict | ...
 ```
 
-### Action
-What to do with state:
-- `Keep` - Maintain in current location
-- `Move` - Transfer to different tier
-- `Prefetch` - Proactive movement
-- `Recompute` - Discard and recompute when needed
-- `Approximate` - Use lower-fidelity version
-- `Evict` - Remove from memory
+### Move vs. Recompute
 
-### CostModel
-Estimates action costs based on hardware:
+Core tradeoff analysis:
 
 ```rust
-let move_cost = cost_model.move_cost(&state, Location::Hbm);
-let (action, cost, rationale) = cost_model.compare_move_vs_recompute(&state, &graph, &registry);
+let comparison = cost_model.compare_move_vs_recompute(&state, from, to);
+
+if comparison.should_recompute {
+    // Recomputing is faster/cheaper than loading
+    Action::Recompute
+} else {
+    Action::Move
+}
 ```
 
-### DecisionEngine
-Makes optimal decisions based on execution graph:
+## Hardware Support
 
-```rust
-let plan = engine.plan(&states, &graph, &constraints, current_op_idx);
+Aether is designed for heterogeneous memory systems:
+
+| Tier | Typical Hardware | Bandwidth | Latency |
+|------|------------------|-----------|---------|
+| HBM | GPU Memory (H100: 80GB) | 3.35 TB/s | ~0.1 μs |
+| DRAM | CPU Memory | 200 GB/s | ~0.1 μs |
+| CXL | CXL Memory Expander | 64 GB/s | ~0.3 μs |
+| NVMe | SSD Storage | 7 GB/s | ~10 μs |
+
+Built-in presets:
+- `HardwareConfig::h100()` - NVIDIA H100
+- `HardwareConfig::a100()` - NVIDIA A100
+- `HardwareConfig::rtx_4090()` - Consumer GPU
+
+## Building
+
+### Requirements
+
+- Rust 1.70+
+- CUDA Toolkit 12.0+ (optional, for GPU support)
+- Python 3.8+ (for Python bindings)
+
+### Build
+
+```bash
+# Core crates (no GPU required)
+cargo build --release
+
+# With CUDA support
+cargo build --release --features cuda
+
+# Python bindings
+cd crates/aether-python
+pip install maturin
+maturin develop --release
 ```
-
----
-
-## Benchmarks (Target)
-
-| Workload | Baseline | Aether | Improvement |
-|----------|----------|--------|-------------|
-| Mixtral 8x7B (24GB GPU) | OOM | Runs | ∞ |
-| 128K context (constrained) | 45 tok/s | 60 tok/s | +33% |
-| MoE expert loading | 10ms stall | 2ms overlap | -80% |
-
----
-
-## Roadmap
-
-- [x] Core abstractions (Rust)
-- [x] Cost model
-- [x] Decision engine
-- [x] State manager
-- [ ] CUDA memory operations
-- [ ] Async transfer engine
-- [ ] vLLM integration
-- [ ] Python bindings (PyO3)
-- [ ] Benchmark suite
-
----
-
-## Why Rust?
-
-| Factor | C++ | Rust | Python |
-|--------|-----|------|--------|
-| Performance | ⭐⭐⭐ | ⭐⭐⭐ | ⭐ |
-| Memory Safety | ⭐ | ⭐⭐⭐ | ⭐⭐ |
-| Concurrency | ⭐⭐ | ⭐⭐⭐ | ⭐ |
-| CUDA Support | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ |
-
-Rust provides:
-- Memory safety without GC (critical for a runtime)
-- Zero-cost abstractions
-- Excellent concurrency primitives
-- Growing ML ecosystem (candle, burn, mistral.rs)
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
----
 
 ## License
 
-Apache 2.0
+Apache-2.0
 
----
+## Research Motivation
 
-## Citation
+Aether emerged from the insight that modern AI inference runtimes (vLLM, TensorRT-LLM,
+NVIDIA Dynamo) are converging on sophisticated memory management but still treat it as
+subordinate to scheduling. The key question Aether asks is:
 
-```bibtex
-@software{aether2026,
-  title = {Aether: State-Aware AI Execution Runtime},
-  year = {2026},
-  url = {https://github.com/aether-runtime/aether}
-}
-```
+> Can an inference runtime jointly plan computation and state movement rather than
+> treating memory management as a subordinate cache subsystem?
+
+This leads to treating **compute-vs-move** as a first-class scheduling decision,
+enabling optimizations like:
+
+- Recomputing activations instead of loading from NVMe when faster
+- Prefetching expert weights based on routing prediction
+- Approximating states under memory pressure
+- Cross-state optimization (e.g., cache activation vs. KV tradeoffs)
