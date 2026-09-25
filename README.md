@@ -32,31 +32,64 @@ flowchart TD
         SM["State<br/>Manager"]
         CM["Cost<br/>Model"]
         DE["Decision Engine"]
+        SE["State<br/>Executor"]
         KE["Kernel<br/>Executor"]
         TS["Transfer<br/>Scheduler"]
+        CB["CUDA Backend"]
+        HBM["HBM"]
+        DRAM["DRAM"]
+        NVMe["NVMe"]
+
+        EG --> DE
+        SM --> DE
+        CM -.owned by.-> DE
+
+        DE -->|ExecutionPlan| SE
+
+        KE --> SE
+        KE --> TS
+        SE --> TS
+
+        SE --> CB
+        KE --> CB
+        TS --> CB
+
+        CB --> HBM
+        CB --> DRAM
+        SE -.file I/O.-> NVMe
+    end
+```
+
+```mermaid
+flowchart TD
+    subgraph AETHER["AETHER RUNTIME"]
+        direction TB
+
+        EG["Execution<br/>Graph"]
+        SM["State<br/>Manager"]
+        CM["Cost<br/>Model"]
+        DE["Decision Engine"]
         SE["State<br/>Executor"]
+        KE["Kernel<br/>Executor"]
+        TS["Transfer<br/>Scheduler"]
         CB["CUDA Backend"]
         HBM["HBM"]
         DRAM["DRAM"]
         NVMe["NVMe"]
 
         EG --> SM
-        CM --> SM
-        EG --> DE
         SM --> DE
-        CM --> DE
+        CM --> SM
 
-        DE --> KE
-        DE --> TS
         DE --> SE
-
-        KE --> CB
+        DE --> TS
+        DE --> KE
         TS --> CB
-        SE --> CB
-
-        CB --> HBM
+        
         CB --> DRAM
         CB --> NVMe
+        CB --> HBM
+
     end
 ```
 
