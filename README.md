@@ -28,68 +28,55 @@ flowchart TD
     subgraph AETHER["AETHER RUNTIME"]
         direction TB
 
-        EG["Execution<br/>Graph"]
-        SM["State<br/>Manager"]
-        CM["Cost<br/>Model"]
-        DE["Decision Engine"]
-        SE["State<br/>Executor"]
-        KE["Kernel<br/>Executor"]
-        TS["Transfer<br/>Scheduler"]
-        CB["CUDA Backend"]
-        HBM["HBM"]
-        DRAM["DRAM"]
-        NVMe["NVMe"]
+        subgraph PLANNING["Planning Layer"]
+            EG["Execution Graph"]
+            SM["State Manager"]
+        end
 
+        subgraph DECISION["Decision Layer"]
+            DE["Decision Engine"]
+            CM["Cost Model"]
+            CM --> DE
+        end
+
+        subgraph EXECUTION["Execution Layer"]
+            SE["State Executor"]
+            KE["Kernel Executor"]
+            TS["Transfer Scheduler"]
+        end
+
+        subgraph BACKEND["Backend Layer"]
+            TE["Transfer Engine"]
+            COMPUTE["GPU Compute"]
+        end
+
+        subgraph MEMORY["Memory Tiers"]
+            HBM["HBM"]
+            DRAM["DRAM"]
+            NVMe["NVMe"]
+            CXL["CXL"]
+        end
+
+        %% Planning to Decision
         EG --> DE
         SM --> DE
-        CM -.owned by.-> DE
 
+        %% Decision to Execution
         DE -->|ExecutionPlan| SE
+        DE -->|ExecutionPlan| KE
 
+        %% Execution layer connections
         KE --> SE
         KE --> TS
-        SE --> TS
+        SE --> TE
+        TS --> TE
+        KE --> COMPUTE
 
-        SE --> CB
-        KE --> CB
-        TS --> CB
-
-        CB --> HBM
-        CB --> DRAM
-        SE -.file I/O.-> NVMe
-    end
-```
-
-```mermaid
-flowchart TD
-    subgraph AETHER["AETHER RUNTIME"]
-        direction TB
-
-        EG["Execution<br/>Graph"]
-        SM["State<br/>Manager"]
-        CM["Cost<br/>Model"]
-        DE["Decision Engine"]
-        SE["State<br/>Executor"]
-        KE["Kernel<br/>Executor"]
-        TS["Transfer<br/>Scheduler"]
-        CB["CUDA Backend"]
-        HBM["HBM"]
-        DRAM["DRAM"]
-        NVMe["NVMe"]
-
-        EG --> SM
-        SM --> DE
-        CM --> SM
-
-        DE --> SE
-        DE --> TS
-        DE --> KE
-        TS --> CB
-        
-        CB --> DRAM
-        CB --> NVMe
-        CB --> HBM
-
+        %% Backend to Memory (all tiers equal)
+        TE --> HBM
+        TE --> DRAM
+        TE --> NVMe
+        TE --> CXL
     end
 ```
 
