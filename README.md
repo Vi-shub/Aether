@@ -23,41 +23,74 @@ Aether treats **decision** as the fundamental primitive, choosing between:
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    subgraph AETHER["AETHER RUNTIME"]
+        direction TB
+
+        EG["Execution<br/>Graph"]
+        SM["State<br/>Manager"]
+        CM["Cost<br/>Model"]
+        DE["Decision Engine"]
+        SE["State<br/>Executor"]
+        KE["Kernel<br/>Executor"]
+        TS["Transfer<br/>Scheduler"]
+        CB["CUDA Backend"]
+        HBM["HBM"]
+        DRAM["DRAM"]
+        NVMe["NVMe"]
+
+        EG --> DE
+        SM --> DE
+        CM -.owned by.-> DE
+
+        DE -->|ExecutionPlan| SE
+
+        KE --> SE
+        KE --> TS
+        SE --> TS
+
+        SE --> CB
+        KE --> CB
+        TS --> CB
+
+        CB --> HBM
+        CB --> DRAM
+        SE -.file I/O.-> NVMe
+    end
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    AETHER RUNTIME                           │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │ Execution   │    │   State     │    │   Cost      │     │
-│  │   Graph     │───►│  Manager    │◄───│   Model     │     │
-│  └─────────────┘    └─────────────┘    └─────────────┘     │
-│         │                  │                  │             │
-│         └──────────────────┼──────────────────┘             │
-│                            ▼                                │
-│                  ┌─────────────────┐                        │
-│                  │ Decision Engine │                        │
-│                  └────────┬────────┘                        │
-│                           │                                 │
-│         ┌─────────────────┼─────────────────┐              │
-│         ▼                 ▼                 ▼              │
-│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐      │
-│  │   Kernel    │   │  Transfer   │   │   State     │      │
-│  │  Executor   │   │  Scheduler  │   │  Executor   │      │
-│  └─────────────┘   └─────────────┘   └─────────────┘      │
-│         │                 │                 │              │
-│         └─────────────────┼─────────────────┘              │
-│                           ▼                                │
-│                  ┌─────────────────┐                        │
-│                  │  CUDA Backend   │                        │
-│                  └─────────────────┘                        │
-│                           │                                 │
-│         ┌─────────────────┼─────────────────┐              │
-│         ▼                 ▼                 ▼              │
-│     ┌───────┐        ┌───────┐        ┌───────┐           │
-│     │  HBM  │        │ DRAM  │        │ NVMe  │           │
-│     └───────┘        └───────┘        └───────┘           │
-└─────────────────────────────────────────────────────────────┘
+
+```mermaid
+flowchart TD
+    subgraph AETHER["AETHER RUNTIME"]
+        direction TB
+
+        EG["Execution<br/>Graph"]
+        SM["State<br/>Manager"]
+        CM["Cost<br/>Model"]
+        DE["Decision Engine"]
+        SE["State<br/>Executor"]
+        KE["Kernel<br/>Executor"]
+        TS["Transfer<br/>Scheduler"]
+        CB["CUDA Backend"]
+        HBM["HBM"]
+        DRAM["DRAM"]
+        NVMe["NVMe"]
+
+        EG --> SM
+        SM --> DE
+        CM --> SM
+
+        DE --> SE
+        DE --> TS
+        DE --> KE
+        TS --> CB
+        
+        CB --> DRAM
+        CB --> NVMe
+        CB --> HBM
+
+    end
 ```
 
 ## Crates
